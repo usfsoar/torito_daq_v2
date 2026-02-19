@@ -11,11 +11,24 @@ bool LoraSend::init(LoraModule *lora_mod, RingBuffer *rb, uint8_t dest_address_)
 }
 
 bool LoraSend::send_next() {
+    // Basic guards
     if (!ring_buffer || !lora_module) return false;
 
+    // Respect short backoff after a failure to avoid repeated blocking attempts
+    if (millis() < next_allowed_send_ms) return false;
+
+    // Nothing to send
+    if (ring_buffer->get_count() == 0) return false;
+
+    // If module is currently not known-online, skip and set backoff
+    if (!lora_module->is_online()) {
+        next_allowed_send_ms = millis() + 5000; // 5s backoff
+        return false;
+    }
+
+    // Pop one frame and attempt send
     SampleFrame frame;
     if (!ring_buffer->pop(&frame)) {
-        // nothing to send
         return false;
     }
 
@@ -23,8 +36,17 @@ bool LoraSend::send_next() {
     size_t len = serialize_frame_header(frame, buf, sizeof(buf));
     if (len == 0) return false; // serialization failure
 
-    // Send packed header as one LoRa frame (hex-encoded internally)
-    return lora_module->send_data_hexstr(dest_address, buf, len);
+    // Try to send; on failure requeue and set backoff to avoid spinning
+    if (lora_module->send_data_hexstr(dest_address, buf, len)) {
+        // success
+        next_allowed_send_ms = 0;
+        return true;
+    } else {
+        // push frame back for retry later
+        (void)ring_buffer->push(&frame);
+        next_allowed_send_ms = millis() + 5000; // 5s backoff
+        return false;
+    }
 }
 
 size_t LoraSend::send_all() {

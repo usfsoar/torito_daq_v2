@@ -6,9 +6,9 @@
 
 // LoRa Network Configuration
 #define LORA_BAND 915000000      // 915 MHz for US
-#define LORA_NETWORK_ID 5        // Must match on all devices
-#define LORA_SENDER_ADDRESS 2    // Address for sender
-#define LORA_RECEIVER_ADDRESS 7  // Address for receiver
+#define LORA_NETWORK_ID 18        // Must match on all devices
+#define LORA_SENDER_ADDRESS 3    // Address for sender
+#define LORA_RECEIVER_ADDRESS 4  // Address for receiver
 
 // AT Command Templates
 #define AT_TEST "AT"
@@ -16,6 +16,14 @@
 #define AT_SET_BAND_FMT "AT+BAND=%lu"
 #define AT_SET_NETWORK_FMT "AT+NETWORKID=%d"
 #define AT_SEND_FMT "AT+SEND=%d,%d,%s"  // dest, length, data
+#define AT_SET_PARAMETER_FMT "AT+PARAMETER=%d,%d,%d,%d"  // SF, BW, CR, preamble
+
+// Default LoRa PHY parameter set (used by LoRaModule::configure)
+#define LORA_PARAMETER_SF 11
+#define LORA_PARAMETER_BW 9
+#define LORA_PARAMETER_CR 4
+#define LORA_PARAMETER_PREAMBLE 24
+#define LORA_PARAMETER_DEFAULT_STR "11,9,4,24"
 
 // Timing Configuration
 #define AT_COMMAND_TIMEOUT 1000

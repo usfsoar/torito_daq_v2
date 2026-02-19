@@ -1,11 +1,10 @@
 #include "loramodule.h"
 
-LoraModule::LoraModule(uint8_t rx_pin, uint8_t tx_pin, uint8_t address) 
-    : _rx_pin(rx_pin), _tx_pin(tx_pin), _address(address) {
-}
+LoraModule::LoraModule(uint8_t address) 
+    : _address(address) {}
 
 bool LoraModule::begin() {
-    lora_serial.begin(115200);
+    lora_serial.begin(LORA_BAUD);
     delay(1000);
     Serial.println("Initializing LoRa Module...");
     if (send_at_command("AT").indexOf("OK") != -1) {
@@ -34,11 +33,27 @@ bool LoraModule::configure(uint8_t address, unsigned long band, uint8_t network_
     sprintf(cmd, "AT+NETWORKID=%d", network_id);
     send_at_command(cmd);
     delay(100);
-    
+
+    // Apply default radio parameters (SF, BW, CR, preamble)
+    if (set_parameter(LORA_PARAMETER_SF, LORA_PARAMETER_BW, LORA_PARAMETER_CR, LORA_PARAMETER_PREAMBLE)) {
+        Serial.print("LoRa parameters set: ");
+        Serial.println(LORA_PARAMETER_DEFAULT_STR);
+    } else {
+        Serial.println("Warning: failed to set LoRa parameters");
+    }
+
     Serial.println("LoRa configured: Address=" + String(address) + 
                    ", Band=" + String(band) + 
                    ", NetworkID=" + String(network_id));
     return true;
+}
+
+bool LoraModule::set_parameter(uint8_t sf, uint8_t bw, uint8_t cr, uint8_t preamble) {
+    char cmd[64];
+    sprintf(cmd, AT_SET_PARAMETER_FMT, sf, bw, cr, preamble);
+    String resp = send_at_command(cmd, AT_COMMAND_TIMEOUT);
+    delay(LORA_CONFIG_DELAY);
+    return resp.indexOf("OK") != -1;
 }
 
 String LoraModule::send_at_command(const char* command, unsigned long timeout) {
@@ -60,6 +75,14 @@ String LoraModule::send_at_command(const char* command, unsigned long timeout) {
             }
         }
     }
+
+    // Update online flag from the response so callers can quickly skip future attempts
+    if (result.indexOf("OK") != -1) {
+        _online = true;
+    } else if (result.length() == 0 || result.indexOf("ERROR") != -1) {
+        _online = false;
+    }
+
     Serial.print("Response: ");
     Serial.println(result);
     return result;
@@ -67,9 +90,13 @@ String LoraModule::send_at_command(const char* command, unsigned long timeout) {
 
 // existing API: send a hex string payload
 bool LoraModule::send_data_hexstr(uint8_t dest_address, String hex_data) {
+    // If module previously proved unreachable, skip immediately to avoid long blocking
+    if (!_online) return false;
+
     char cmd[128];
     snprintf(cmd, sizeof(cmd), "AT+SEND=%d,%d,%s", dest_address, (int)(hex_data.length() / 2), hex_data.c_str());
-    String response = send_at_command(cmd, 2000);
+    // use short timeout to avoid long AT delays on failure
+    String response = send_at_command(cmd, 200);
     return response.indexOf("OK") != -1;
 }
 
@@ -96,7 +123,9 @@ bool LoraModule::send_data_hexstr(uint8_t dest_address, const uint8_t* data, siz
     }
     cmd[pos] = '\0';
 
-    String response = send_at_command(cmd, 2000);
+    // If module is known-unreachable, skip to avoid waiting
+    if (!_online) return false;
+    String response = send_at_command(cmd, 200);
     return response.indexOf("OK") != -1;
 }
 

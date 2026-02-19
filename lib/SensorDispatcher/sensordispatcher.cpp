@@ -6,12 +6,12 @@ HighPressureSensor g_high_pressure_sensor;
 
 bool sensor_dispatcher_init() {
     if (!g_low_pressure_sensor.init()) {
-        Serial.println("ERROR: ADS1115 init failed!");
+        Serial.println("ERROR: ADS1115 (low pressure sensor) init failed!");
         return false;
     }
     
     if (!g_high_pressure_sensor.init()) {
-        Serial.println("ERROR: ADS1115 init failed!");
+        Serial.println("ERROR: ADS1115 (high pressure sensor) init failed!");
         return false;
     }
     
