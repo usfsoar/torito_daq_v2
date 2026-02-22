@@ -3,11 +3,10 @@
 // Global state
 static uint32_t seq = 0;
 static uint32_t tick = 0;
-// Last known solenoid/relay code — retain across frames until updated by a successful I2C read.
-static uint16_t last_solenoid_state = 0;
 
 // External buffers (declared in main)
 extern RingBuffer daq_buffer;
+extern SolenoidReceive solenoid_receive;
 
 void daq_init() {
     seq = 0;
@@ -49,16 +48,26 @@ void daq_step() {
         }
     }
 
-    // Read solenoid state and preserve the last successfully-read value across frames.
-    // If the read fails, flag I2C_ERR but still populate the frame with `last_solenoid_state`.
+    // DAQ controls the I2C mux selection for solenoid reads (owned bus control).
+    // If the mux selection fails, mark MUX_ERR and keep the last-cached solenoid value.
     {
         uint16_t cur = 0;
-        if (solenoid_receive.read(cur)) {
-            last_solenoid_state = cur; // update only on successful read
+        if (SOLENOID_MUX_CHANNEL != 0xFF) {
+            if (!mux_select(0, SOLENOID_MUX_CHANNEL)) {
+                frame.status_bits |= MUX_ERR;
+                frame.solenoid_state = solenoid_receive.get_cached_state();
+            } else {
+                if (!solenoid_receive.read(cur)) {
+                    frame.status_bits |= I2C_ERR;
+                }
+                frame.solenoid_state = solenoid_receive.get_cached_state();
+            }
         } else {
-            frame.status_bits |= I2C_ERR;
+            if (!solenoid_receive.read(cur)) {
+                frame.status_bits |= I2C_ERR;
+            }
+            frame.solenoid_state = solenoid_receive.get_cached_state();
         }
-        frame.solenoid_state = last_solenoid_state;
     }
 
     // Push to DAQ buffer (every frame)

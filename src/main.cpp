@@ -69,7 +69,7 @@ void setup() {
         lora_module.configure(LORA_SENDER_ADDRESS, LORA_BAND, LORA_NETWORK_ID);
         lora_sender.init(&lora_module, &lora_buffer, LORA_RECEIVER_ADDRESS);
     }
-    // Initialize SolenoidReceive instance
+    // Initialize SolenoidReceive instance (DAQ owns mux control; init stores I2C addr only)
     if (!solenoid_receive.init(SOLENOID_I2C_ADDR)) {
         Serial.println("ERROR: SolenoidReceive init failed!");
     }

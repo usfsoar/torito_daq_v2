@@ -8,6 +8,7 @@
 #include <sensorconfig.h>
 #include <Arduino.h>
 #include <solenoidreceive.h>
+#include <hwconfig.h>
 
 extern SolenoidReceive solenoid_receive;
 

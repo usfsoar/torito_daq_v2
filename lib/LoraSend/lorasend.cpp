@@ -22,6 +22,7 @@ bool LoraSend::send_next() {
 
     // If module is currently not known-online, skip and set backoff
     if (!lora_module->is_online()) {
+        Serial.println("LoraSend: module not online, skipping send");
         next_allowed_send_ms = millis() + 5000; // 5s backoff
         return false;
     }
@@ -32,10 +33,11 @@ bool LoraSend::send_next() {
         return false;
     }
 
+    // serialize into a fixed-size stack buffer (headroom kept by LoraSend::MAX_SERIALIZED_HEADER)
     uint8_t buf[MAX_SERIALIZED_HEADER];
     size_t len = serialize_frame_header(frame, buf, sizeof(buf));
     if (len == 0) return false; // serialization failure
-
+    Serial.println(len);
     // Try to send; on failure requeue and set backoff to avoid spinning
     if (lora_module->send_data_hexstr(dest_address, buf, len)) {
         // success
@@ -45,6 +47,14 @@ bool LoraSend::send_next() {
         // push frame back for retry later
         (void)ring_buffer->push(&frame);
         next_allowed_send_ms = millis() + 5000; // 5s backoff
+        Serial.print("Failed to send over lora, len=");
+        Serial.println(len);
+        Serial.print("Data: ");
+        for (size_t i = 0; i < len; ++i) {
+            if (buf[i] < 0x10) Serial.print('0');
+            Serial.print(buf[i], HEX);
+        }
+        Serial.println();
         return false;
     }
 }
@@ -54,6 +64,7 @@ size_t LoraSend::send_all() {
     size_t sent = 0;
     SampleFrame frame;
     while (ring_buffer->pop(&frame)) {
+        // reuse the same stack buffer for each packet
         uint8_t buf[MAX_SERIALIZED_HEADER];
         size_t len = serialize_frame_header(frame, buf, sizeof(buf));
         if (len == 0) break;
@@ -102,6 +113,5 @@ size_t LoraSend::serialize_frame_header(const SampleFrame &frame, uint8_t *out, 
         out[pos++] = (uint8_t)(v & 0xFF);
         out[pos++] = (uint8_t)((v >> 8) & 0xFF);
     }
-
     return pos;
 }
